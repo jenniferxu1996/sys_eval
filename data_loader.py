@@ -17,15 +17,14 @@ class SingleFrameDataloader(data.Dataset):
         self.mode = args.mode
         if self.dataset == 'mpii_cooking':
             if self.mode == 'validation':
-                self.all_videos = [each_video for each_video in os.listdir(self.file_path) if
-                                   each_video.split('_')[0] in utils_mpii_cooking.VALID + utils_mpii_cooking.TEST]
+                self.all_videos = np.load('ckpt_repo/mpii_cooking/valid_ids.npy')
             else:
-                self.all_videos = [each_video for each_video in os.listdir(self.file_path) if
-                                   each_video.split('_')[0] not in utils_mpii_cooking.VALID + utils_mpii_cooking.TEST]
+                self.all_videos = np.load('ckpt_repo/mpii_cooking/train_ids.npy')
             self.label_map = utils_mpii_cooking.label_mapping(args)
             self.annotation_df = pd.read_csv(f"{args.data_dir_path}/mpii_cooking/cooking.csv")
         elif self.dataset == 'epic_kitchen':
             self.all_videos = os.listdir(os.path.join(self.file_path, self.mode))
+            self.file_path = f'{self.file_path}/{self.mode}'
             self.annotation_df = pd.read_csv(f"{args.data_dir_path}/epic_kitchen/EPIC_100_{self.mode}.csv")
         self.transform = transform
 
@@ -61,11 +60,9 @@ class SeqDataloader(data.Dataset):
         self.mode = args.mode
         if self.dataset == 'mpii_cooking':
             if self.mode == 'validation':
-                self.all_videos = [each_video for each_video in os.listdir(self.file_path) if
-                                   each_video.split('_')[0] in utils_mpii_cooking.VALID + utils_mpii_cooking.TEST]
+                self.all_videos = np.load('ckpt_repo/mpii_cooking/valid_ids.npy')
             else:
-                self.all_videos = [each_video for each_video in os.listdir(self.file_path) if
-                                   each_video.split('_')[0] not in utils_mpii_cooking.VALID + utils_mpii_cooking.TEST]
+                self.all_videos = np.load('ckpt_repo/mpii_cooking/train_ids.npy')
             self.label_map = utils_mpii_cooking.label_mapping(args)
             self.annotation_df = pd.read_csv(f"{args.data_dir_path}/mpii_cooking/cooking.csv")
         elif self.dataset == 'epic_kitchen':
@@ -89,7 +86,8 @@ class SeqDataloader(data.Dataset):
             for j in range(pad_len):
                 img_sequence.append(torch.zeros(3, 224, 224))
         img_sequence_tensor = torch.stack(img_sequence)
-        img_sequence_tensor = img_sequence_tensor.permute(1, 0, 2, 3)
+        if self.args.model != 'conv_lstm':
+            img_sequence_tensor = img_sequence_tensor.permute(1, 0, 2, 3)
         target = None
         if self.dataset == 'mpii_cooking':
             selected_annotation = self.annotation_df.loc[self.annotation_df['video_id'] == each_video]
@@ -99,3 +97,9 @@ class SeqDataloader(data.Dataset):
             target = selected_annotation['verb_class'].values[0]
         target = np.asarray(label_binarize([target], classes=[i for i in range(self.args.num_class)])).ravel()
         return img_sequence_tensor, torch.Tensor(target)
+
+# if __name__ == '__main__':
+#     file_path = f'../data/mpii_cooking/frame_16'
+#     train_files = np.array([each_video for each_video in os.listdir(file_path) if each_video.split('_')[0] not in utils_mpii_cooking.VALID + utils_mpii_cooking.TEST])
+#     np.save('train_ids.npy', train_files)
+#     print(np.load('train_ids.npy').shape)

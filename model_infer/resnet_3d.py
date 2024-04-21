@@ -30,7 +30,7 @@ def inference(args):
         for i, row in cls_df.iterrows():
             classes.append(row['key'])
 
-    infer_loader = DataLoader(infer_data, 1, num_workers=1, shuffle=False)
+    infer_loader = DataLoader(infer_data, 16, num_workers=1, shuffle=False)
 
     if args.pretrained:
         model = torch.load(f"ckpt_repo/{args.dataset}/{args.model}_{args.pretrained_set}_pre.pt").to(device)
@@ -48,15 +48,19 @@ def inference(args):
     fc_all = []
 
     for video, (inputs, targets) in tqdm.tqdm(infer_loader, desc="inference"):
-        id_all.append(video[0])
+        for each_video in video:
+            id_all.append(each_video)
         inputs = inputs.to(device)
-        gt_all.append(np.argmax(targets, axis=-1).numpy())
+        for each_target in targets:
+            gt_all.append(np.argmax(each_target, axis=-1).numpy())
         logits = model(inputs)
-        fc_all.append(np.ravel(logits.cpu().detach().numpy()))
-        y_prob = F.softmax(model(inputs), dim=1)
+        for logit in logits:
+            fc_all.append(logit.cpu().detach().numpy())
+        y_prob = F.softmax(logits, dim=1)
         # y_prob = model(inputs)
-        prob_all.append(np.ravel(y_prob.cpu().detach().numpy()))
-        y_predict = np.argmax(y_prob.cpu().detach().numpy(), axis=-1)
-        pred_all.append(y_predict)
+        for each_prob in y_prob:
+            prob_all.append(each_prob.cpu().detach().numpy())
+            y_predict = np.argmax(each_prob.cpu().detach().numpy(), axis=-1)
+            pred_all.append(y_predict)
 
     return id_all, gt_all, pred_all, prob_all, fc_all

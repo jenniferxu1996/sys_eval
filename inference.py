@@ -46,6 +46,7 @@ def get_evaluation_metrics(y_true, y_prob, y_predict, class_num):
     # print(type(precision), type(recall), type(ap), type(multi_confusion), type(confusion))
     return precision_all, recall_all, ap, result_report, multi_confusion.tolist(), confusion.tolist(), mcc, acc, f1
 
+
 def inference_main(args):
     id_all = None
     gt_all = None
@@ -66,11 +67,11 @@ def inference_main(args):
 
     inference_res = pd.DataFrame({'id': id_all, 'gt': gt_all, 'pred': pred_all, 'conf': prob_all, 'logit': fc_all})
     if args.pretrained:
-        inference_res.to_csv(f'inference_results/{args.model}_{args.pretrained_set}_pre_{args.mode}.csv', index=False)
-        inference_res.to_pickle(f'inference_results/{args.model}_{args.pretrained_set}_pre_{args.mode}.pkl')
+        inference_res.to_csv(f'inference_results/{args.dataset}/{args.model}_{args.pretrained_set}_pre_{args.mode}.csv', index=False)
+        inference_res.to_pickle(f'inference_results/{args.dataset}/{args.model}_{args.pretrained_set}_pre_{args.mode}.pkl')
     else:
-        inference_res.to_csv(f'inference_results/{args.model}_{args.mode}.csv', index=False)
-        inference_res.to_pickle(f'inference_results/{args.model}_{args.mode}.pkl')
+        inference_res.to_csv(f'inference_results/{args.dataset}/{args.model}_{args.mode}.csv', index=False)
+        inference_res.to_pickle(f'inference_results/{args.dataset}/{args.model}_{args.mode}.pkl')
 
     labels = [i for i in range(0, args.num_class)]
     result_report = classification_report(np.ravel(np.array(gt_all)), np.ravel(np.array(pred_all)), labels=labels)

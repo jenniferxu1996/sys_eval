@@ -25,16 +25,15 @@ class ViViTDataloader(data.Dataset):
         self.mode = args.mode
         if self.dataset == 'mpii_cooking':
             if self.mode == 'validation':
-                self.all_videos = [each_video for each_video in os.listdir(self.file_path) if
-                                   each_video.split('_')[0] in utils_mpii_cooking.VALID + utils_mpii_cooking.TEST]
+                self.all_videos = np.load('ckpt_repo/mpii_cooking/valid_ids.npy')
             else:
-                self.all_videos = [each_video for each_video in os.listdir(self.file_path) if
-                                   each_video.split('_')[0] not in utils_mpii_cooking.VALID + utils_mpii_cooking.TEST]
+                self.all_videos = np.load('ckpt_repo/mpii_cooking/train_ids.npy')
             self.label_map = utils_mpii_cooking.label_mapping(args)
             self.annotation_df = pd.read_csv(f"{args.data_dir_path}/mpii_cooking/cooking.csv")
         elif self.dataset == 'epic_kitchen':
             self.all_videos = os.listdir(os.path.join(self.file_path, self.mode))
-            self.annotation_df = pd.read_csv(f"{args.data_dir_path}/epic_kitchen/EPIC_100_validation.csv")
+            self.file_path = f'{self.file_path}/{self.mode}'
+            self.annotation_df = pd.read_csv(f"{args.data_dir_path}/epic_kitchen/EPIC_100_{self.mode}.csv")
         self.transform = transform
 
     def __len__(self):
@@ -54,8 +53,13 @@ class ViViTDataloader(data.Dataset):
             for j in range(pad_len):
                 img_sequence.append(torch.zeros(3, 224, 224))
         img_sequence_tensor = torch.stack(img_sequence)
-        selected_annotation = self.annotation_df.loc[self.annotation_df['video_id'] == each_video]
-        target = self.label_map[selected_annotation['label'].values[0]]
+        target = None
+        if self.dataset == 'mpii_cooking':
+            selected_annotation = self.annotation_df.loc[self.annotation_df['video_id'] == each_video]
+            target = self.label_map[selected_annotation['label'].values[0]]
+        elif self.dataset == 'epic_kitchen':
+            selected_annotation = self.annotation_df.loc[self.annotation_df['narration_id'] == each_video]
+            target = selected_annotation['verb_class'].values[0]
         target = np.asarray(label_binarize([target], classes=[i for i in range(self.args.num_class)])).ravel()
         return img_sequence_tensor, torch.Tensor(target)
 
@@ -81,7 +85,7 @@ def inference(args):
         for i, row in cls_df.iterrows():
             classes.append(row['key'])
 
-    infer_loader = DataLoader(infer_data, 1, num_workers=4, shuffle=False)
+    infer_loader = DataLoader(infer_data, 4, num_workers=4, shuffle=False)
 
     with open(f"ckpt_repo/{args.dataset}/vivit_config.json", 'r') as f:
         configs = json.load(f, object_hook=lambda d: SimpleNamespace(**d))
@@ -99,16 +103,20 @@ def inference(args):
     fc_all = []
 
     for video, (inputs, targets) in tqdm.tqdm(infer_loader, desc="inference"):
-        id_all.append(video[0])
+        for each_video in video:
+            id_all.append(each_video)
         inputs = inputs.to(device)
-        gt_all.append(np.argmax(targets, axis=-1).numpy())
+        for each_target in targets:
+            gt_all.append(np.argmax(each_target, axis=-1).numpy())
         logits = model.validate(inputs)
-        fc_all.append(np.ravel(logits.cpu().detach().numpy()))
-        y_prob = F.softmax(model.validate(inputs), dim=1)
+        for logit in logits:
+            fc_all.append(logit.cpu().detach().numpy())
+        y_prob = F.softmax(logits, dim=1)
         # y_prob = model(inputs)
-        prob_all.append(np.ravel(y_prob.cpu().detach().numpy()))
-        y_predict = np.argmax(y_prob.cpu().detach().numpy(), axis=-1)
-        pred_all.append(y_predict)
+        for each_prob in y_prob:
+            prob_all.append(each_prob.cpu().detach().numpy())
+            y_predict = np.argmax(each_prob.cpu().detach().numpy(), axis=-1)
+            pred_all.append(y_predict)
 
     return id_all, gt_all, pred_all, prob_all, fc_all
 
